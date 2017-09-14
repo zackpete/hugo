@@ -15,12 +15,15 @@ package transform
 
 import (
 	"bytes"
-	"html"
-	"html/template"
-
+	"errors"
 	"github.com/gohugoio/hugo/deps"
 	"github.com/gohugoio/hugo/helpers"
 	"github.com/spf13/cast"
+	"html"
+	"html/template"
+	"io"
+	"os/exec"
+	"strings"
 )
 
 // New returns a new instance of the transform-namespaced template functions.
@@ -120,4 +123,53 @@ func (ns *Namespace) Plainify(s interface{}) (string, error) {
 	}
 
 	return helpers.StripHTML(ss), nil
+}
+
+// Generates SVG based on s, which is described using the PlantUML language.
+// Optionally add config path with c, and optionally add arguments to the command with a.
+func (ns *Namespace) UML(s, c, a interface{}) (template.HTML, error) {
+	inner, err := cast.ToStringE(s)
+	if err != nil {
+		return "", err
+	}
+
+	args := []string{"-p", "-tsvg"}
+
+	if c != nil {
+		if config, err := cast.ToStringE(c); err == nil {
+			args = append(args, "-config", config)
+		} else {
+			return "", err
+		}
+	}
+
+	if a != nil {
+		if extraArgs, err := cast.ToStringE(a); err == nil {
+			args = append(args, strings.Fields(extraArgs)...)
+		} else {
+			return "", err
+		}
+	}
+
+	cmd := exec.Command("plantuml", args...)
+
+	cmd.Stdin = io.MultiReader(
+		strings.NewReader("@startuml\n"),
+		strings.NewReader(inner),
+		strings.NewReader("@enduml\n"),
+	)
+
+	stdout := new(bytes.Buffer)
+	cmd.Stdout = stdout
+
+	cmd.Start()
+	if err := cmd.Wait(); err != nil {
+		if err.Error() == "exec: not started" {
+			err = errors.New("couldn't execute plantuml: make sure it is installed and on the PATH")
+		}
+
+		return "", err
+	} else {
+		return template.HTML(stdout.String()), err
+	}
 }

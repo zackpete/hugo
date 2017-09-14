@@ -41,6 +41,11 @@ func init() {
 			[][2]string{},
 		)
 
+		ns.AddMethodMapping(ctx.UML,
+			[]string{"uml"},
+			[][2]string{},
+		)
+
 		ns.AddMethodMapping(ctx.HTMLEscape,
 			[]string{"htmlEscape"},
 			[][2]string{
